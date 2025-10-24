@@ -1,0 +1,17 @@
+name: Architecture
+on:
+  pull_request:
+    branches:
+      - development
+      - develop
+      - main
+      - master
+      - release-v[0-9]+.[0-9]+.[xX]
+
+jobs:
+  call-reusable-workflow:
+    name: Architecture
+    uses: santander-group-shared-assets/gln-back-workflows/.github/workflows/archunit-validation.yml@v1
+    with:
+      framework: 'backend'
+    secrets: inherit

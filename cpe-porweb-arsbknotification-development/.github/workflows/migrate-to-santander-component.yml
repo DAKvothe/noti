@@ -1,0 +1,16 @@
+name: Migrate to Santander Component
+
+on:
+  workflow_run:
+    workflows: [Integration]
+    types: [completed]
+    branches: [main, master, develop, development]
+
+jobs:
+  call-reusable-workflow:
+    name: Migrate to Santander Component
+    uses: santander-group-shared-assets/gln-back-workflows/.github/workflows/migrate-darwin-to-santander-component.yml@v1
+    secrets: inherit
+    with:
+      target-name: "Santander Spring Boot Microservice"
+      target-version: "1.0.7"

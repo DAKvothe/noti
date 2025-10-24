@@ -1,0 +1,70 @@
+{
+    "groups": [
+      {
+        "name": "apparsenal.backing-services.database",
+        "type": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Arsenal Database configuration properties."
+      }
+    ],
+    "properties": [
+      {
+        "name": "apparsenal.backing-services.database.username",
+        "type": "java.lang.String",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Username database connection."
+      },
+      {
+        "name": "apparsenal.backing-services.database.password",
+        "type": "java.lang.String",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Password database connection."
+      },
+      {
+        "name": "apparsenal.backing-services.database.driver-class-name",
+        "type": "java.lang.String",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Class JDBC connection."
+      },
+      {
+        "name": "apparsenal.backing-services.database.url",
+        "type": "java.lang.String",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "URL string JDBC connection."
+      },
+      {
+        "name": "apparsenal.backing-services.database.pool-name",
+        "type": "java.lang.String",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Hikary pool name.",
+        "defaultValue": "ArsenalPool"
+      },
+      {
+        "name": "apparsenal.backing-services.database.min-pool-size",
+        "type": "java.lang.Integer",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Hikary min pool size (Initial).",
+        "defaultValue": 1
+      },
+      {
+        "name": "apparsenal.backing-services.database.max-pool-size",
+        "type": "java.lang.Integer",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Hikary max pool size.",
+        "defaultValue": 2
+      },
+      {
+        "name": "apparsenal.backing-services.database.validation-timeout",
+        "type": "java.lang.Integer",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Hikary Validation time-out(ms).",
+        "defaultValue": 250
+      },
+      {
+        "name": "apparsenal.backing-services.database.max-lifetime",
+        "type": "java.lang.Integer",
+        "sourceType": "com.santander.cpe.porweb.config.DatabaseConfig",
+        "description": "Hikary max life Time(ms).",
+        "defaultValue": 1800000
+      }     
+    ]
+  }

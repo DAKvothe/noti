@@ -1,0 +1,345 @@
+openapi: 3.0.3
+info:
+  title: Indigitall Communications API (AM1) — Email & SMS
+  version: "1.0.0"
+  description: |
+    Contrato para **Email** y **SMS** en Indigitall.
+    Autenticación por `Authorization: ServerKey {UUID}`.
+
+servers:
+  - url: https://am1.api.indigitall.com
+
+tags:
+  - name: Email
+  - name: SMS
+
+paths:
+  /v2/email/send/list:
+    post:
+      tags: [Email]
+      summary: Enviar campaña de correo a una lista de contactos
+      description: Envía una campaña de correo existente a una lista de contactos (email y/o externalCode), con variables y adjuntos opcionales.
+      operationId: sendEmailList
+      security: [ { ServerKeyAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendEmailRequest'
+            examples:
+              ejemploMinimo:
+                summary: Envío mínimo con email + schedule
+                value:
+                  campaignId: 3836
+                  scheduleAt: "2025-10-17T05:00:00.000Z"
+                  contacts:
+                    - email: "julio.cesar.0226@gmail.com"
+              ejemploCompleto:
+                summary: Envío con CC, externalCode, variables y adjunto inmediato
+                value:
+                  campaignId: 3855
+                  cc: ["julio.cesar.0226@hotmail.es"]
+                  contacts:
+                    - email: "julio.cesar.0226@gmail.com"
+                      externalCode: "2"
+                      vars:
+                        unsubscribeUrl: "https://mi-dominio/unsubscribe"
+                        CustomVar1: "Valor 1"
+                        CustomVar2: "Valor 2"
+                      attachments:
+                        - filename: "Archivo.jpg"
+                          contentType: "image/jpeg"
+                          base64Content: "<BASE64>"
+      responses:
+        "200":
+          description: Solicitud aceptada / procesada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendEmailResponse'
+        "400": { description: Petición inválida, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "401": { description: No autorizado, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "429": { description: Límite de peticiones, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        "500": { description: Error interno, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /v2/sms/send/list:
+    post:
+      tags: [SMS]
+      summary: Envío transaccional de mensajes a contactos
+      description: |
+        Envía una campaña SMS a una lista de contactos. Contactos pueden indicarse con **phoneNumber**,
+        **externalCode** o **ambos**. Si el contacto no existe y se incluye la data requerida, se crea automáticamente.
+      operationId: sendSmsList
+      security: [ { ServerKeyAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmsSendListRequest'
+            examples:
+              ejemploMinimo:
+                summary: Envío a contacto con mensaje como parametro
+                value:
+                  campaignId: 10804
+                  contacts:
+                    - phoneNumber: "+51930770079"
+                      vars:
+                        Mensaje: "Hola Julio te mandamos un saludo de Santander"
+              ejemploConVars:
+                summary: Envío programado con paso de variables sobre campaña
+                value:
+                  campaignId: 10763
+                  scheduleAt: "2025-10-17T09:12:39.632Z"
+                  sendTypeOverride: "transactional"
+                  contacts:
+                    - phoneNumber: "+51930770079"
+                      externalCode: "CUST-2"
+                      vars:
+                        Name: "Julio"
+                        Lastname: "Polo"
+      responses:
+        "200":
+          description: Solicitud aceptada / en proceso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsSendResponse'
+        "400": { description: Petición inválida }
+        "401": { description: No autorizado }
+        "429": { description: Límite de peticiones }
+        "500": { description: Error interno }
+
+components:
+  securitySchemes:
+    ServerKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        Prefijo **ServerKey** y la clave UUID. Ejemplo:
+        `Authorization: ServerKey 1ba3b093-f67c-4f10-89fb-fa53df94779a`
+
+  schemas:
+    # ===== Email =====
+    SendEmailRequest:
+      type: object
+      required: [ campaignId, contacts ]
+      properties:
+        campaignId:
+          type: integer
+          format: int64
+          description: ID de campaña creada previamente en la consola de Indigitall.
+        cc:
+          type: array
+          items:
+            type: string
+            format: email
+          description: Lista de direcciones en copia.
+        scheduleAt:
+          type: string
+          format: date-time
+          description: Fecha/hora programada en ISO-8601 (UTC).
+        contacts:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/EmailContact'
+    EmailContact:
+      type: object
+      description: Contacto destino; debe contener al menos uno de email o externalCode.
+      properties:
+        email:
+          type: string
+          format: email
+        externalCode:
+          type: string
+        vars:
+          type: object
+          additionalProperties:
+            type: string
+          description: Variables de plantilla (clave-valor).
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+      anyOf:
+        - required: [ email ]
+        - required: [ externalCode ]
+    Attachment:
+      type: object
+      required: [ filename, contentType, base64Content ]
+      properties:
+        filename:
+          type: string
+        contentType:
+          type: string
+          example: application/pdf
+        base64Content:
+          type: string
+          description: Contenido en Base64.
+    SendEmailResponse:
+      type: object
+      description: Estructura tentativa. Ajustar con la respuesta real de Indigitall si difiere.
+      properties:
+        status:
+          type: string
+          example: accepted
+        requestId:
+          type: string
+        message:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+
+    # ===== SMS =====
+    SmsCampaignCreateRequest:
+      type: object
+      required: [ applicationId, name ]
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        senderName:
+          type: string
+          description: Nombre del remitente (hasta 11 caracteres).
+        message:
+          type: string
+          description: |
+            Contenido del SMS (SMPP). Puede incluir variables `{{var}}`.
+        content:
+          $ref: '#/components/schemas/RcsContent'
+        filters:
+          type: object
+          additionalProperties: true
+        enabled:
+          type: boolean
+          default: true
+        isCustomerService:
+          type: boolean
+          default: false
+        customValues:
+          type: array
+          items: { type: string }
+
+    SmsCampaignUpdateRequest:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        senderName:
+          type: string
+        message:
+          type: string
+        content:
+          $ref: '#/components/schemas/RcsContent'
+        filters:
+          type: object
+          additionalProperties: true
+        enabled:
+          type: boolean
+        isCustomerService:
+          type: boolean
+        customValues:
+          type: array
+          items: { type: string }
+
+    SmsCampaignResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        applicationId:
+          type: integer
+          format: int64
+        name:
+          type: string
+        senderName:
+          type: string
+        message:
+          type: string
+        content:
+          $ref: '#/components/schemas/RcsContent'
+        enabled:
+          type: boolean
+        isCustomerService:
+          type: boolean
+        customValues:
+          type: array
+          items: { type: string }
+
+    RcsContent:
+      type: object
+      description: Contenido para mensajes RCS (formato genérico).
+      properties:
+        type:
+          type: string
+          example: text
+        body:
+          type: string
+          description: Texto del mensaje.
+
+    SmsSendListRequest:
+      type: object
+      required: [ campaignId, contacts ]
+      properties:
+        campaignId:
+          type: integer
+          format: int64
+        scheduleAt:
+          type: string
+          format: date-time
+          description: Fecha/hora programada (UTC, ISO-8601).
+        sendTypeOverride:
+          type: string
+          description: Tipo de envío que sobrescribe el de la campaña (p. ej., transactional).
+        contacts:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SmsContact'
+
+    SmsContact:
+      type: object
+      description: Identificación de contacto. Puede usarse phoneNumber y/o externalCode.
+      properties:
+        phoneNumber:
+          type: string
+          description: Número en formato E.164 (ej. +51999999999).
+        externalCode:
+          type: string
+        vars:
+          type: object
+          additionalProperties:
+            type: string
+          description: Variables de plantilla (clave-valor).
+      anyOf:
+        - required: [ phoneNumber ]
+        - required: [ externalCode ]
+
+    SmsSendResponse:
+      type: object
+      description: Estructura tentativa; ajustar al ejemplo real de respuesta.
+      properties:
+        status:
+          type: string
+          example: accepted
+        requestId:
+          type: string
+        message:
+          type: string

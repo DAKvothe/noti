@@ -1,0 +1,131 @@
+# Spring Boot application properties
+spring:
+  main:
+    banner-mode: 'console'
+  application:
+    name: cpe-porweb-bknotification
+  sql:
+    init:
+      continue-on-error: false
+      # The database connection can be made automatically if the user/password properties
+      # are set directly in the environment variables declared below.
+      #
+      # However, we recommend that you store these credentials in OpenShift Secrets.
+      #
+      # When using Secrets, environment variables now count the path to secret files.
+      #
+      # Spring Boot doesn't "know" how to open Secret files and read their contents, for this reason
+      # We use a custom DataSource (see DatabaseConfig class) that does this process.
+      #
+      # See credential settings further above in the apparsenal.backing-services.database section.
+      platform: h2
+      #driver-class-name: org.h2.Driver
+
+
+
+# Application settings
+apparsenal:
+  backing-services:
+    database:
+      username: ${DATABASE_USER:src/main/resources/database/secret-db-username}
+      password: ${DATABASE_PASSWORD:src/main/resources/database/secret-db-password}
+      driver-class-name: ${DRIVER_CLASS_NAME:org.h2.Driver}
+      url: ${DATABASE_URL:jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1}
+      pool-name: ${POOL_NAME:ArsenalPool}
+      max-pool-size: ${MAX_POOL_SIZE:2}
+      min-idle: ${MIN_IDLE:1}
+      max-lifetime: ${MAX_LIFETIME:1800000}
+      validation-timeout: ${VALIDATION_TIMEOUT:250}
+      idle-timeout: ${IDLE_TIMEOUT:36000}
+      connection-timeout: ${CONNECTION_TIMEOUT:20000}
+      leak-detection-threshold: ${LEAK_DETECTION_THRESHOLD:3000}
+      
+# Data displayed in the "info" endpoint of the Actuator
+info:
+  app:
+    groupId: "com.santander.ars"
+    artifactId: "gln-back-arsenal-backend-archetype"
+    version: "3.18.11"
+    java.version: "17.0.8"
+
+# server port
+server:
+  port: 8080
+  #servlet:
+    #context-path: /cpe-porweb-bknotification 
+  max-http-request-header-size: 24KB
+  tomcat:
+    max-http-response-header-size: 24KB
+
+# Arsenal core library settings
+arsenal:
+  library:
+    core:
+      api:
+        enable-docs: true # Disable Swagger/OpenAPI documentation
+        #archetypekey: ####415253454E414C####
+  logging:
+    console-log: true
+    dev-mode: true
+#    kafka:
+#        servers: localhost:9092
+#        topic: logs
+#        keystore:
+#            location: /tmp/keystore
+#            password: xpto
+#        truststore:
+#            location: /tmp/truststore
+#            password: xpto
+    isGluon: true # If the isGluon field is true, you must set the following parameters:
+#    company: # Santander company whose component is generating the logs.
+#    componentName: # Name of the component that generates the log.
+#    componentId: # Identifier of the component that generates the log.
+#    componentType: # The type of the Gluon component (e.g., microservice, API...)
+#    appName: # The technical application name
+#    appId: # Identifier of the application of the component that generates the log.
+
+# Database settings
+spring.jpa:
+  database: H2
+  show-sql: true
+  generate-ddl: true
+  hibernate:
+    ddl-auto: update
+  properties:
+    hibernate:
+      default_schema: public
+
+# Logging
+# Overriding log groups and levels
+logging:
+  group:
+    web: org.springframework.core.codec, org.springframework.http, org.springframework.web
+    spring: org.springframework.core.env
+    servlet: org.springframework.boot.web, org.apache.catalina, org.apache.coyote, org.apache.tomcat
+    data: org.springframework.jdbc.core, org.hibernate.sql, org.springframework.orm.jpa, org.hibernate, org.jooq.tools.LoggerListener
+    hikari: com.zaxxer.hikari
+    app: com.santander.cpe.porweb
+    arsenal: com.santander.ars.lib
+  level:
+    root: WARN
+    spring: INFO
+    app: INFO
+    servlet: WARN
+    web: WARN
+    data: WARN
+    hikari: ${LOG_LEVEL_HIKARI:DEBUG} 
+    arsenal: INFO
+
+# Health default configurations
+management:
+  endpoint:
+    health:
+      show-details: "ALWAYS"
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+
