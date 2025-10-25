@@ -3,31 +3,38 @@ name: Create PR - Indigitall Reactive Proxy
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
-  pr:
+  create-pr:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: '17'
+          fetch-depth: 0
 
-      - name: Generate reactive proxy files
-        shell: bash
+      - name: Configure Git
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+      - name: Create branch and add reactive proxy files
         run: |
           set -euo pipefail
+          BRANCH="feature/indigitall-reactive-proxy"
+          git checkout -B "$BRANCH"
+
           ROOT="cpe-porweb-arsbknotification-development"
           BASE="$ROOT/src/main/java/com/santander/cpe/porweb/integration/indigitall"
           CFG="$BASE/config"
           SVC="$BASE/service"
           API="$BASE/api/impl/reactive"
-          mkdir -p "$CFG" "$SVC" "$API"
+          mkdir -p "$CFG" "$SVC" "$API" "$ROOT/src/main/resources"
 
-          # IndigitallProperties.java
+          # ---- IndigitallProperties.java
           cat > "$CFG/IndigitallProperties.java" <<'EOF'
           package com.santander.cpe.porweb.integration.indigitall.config;
 
@@ -48,7 +55,7 @@ jobs:
           }
           EOF
 
-          # IndigitallWebClientConfig.java
+          # ---- IndigitallWebClientConfig.java
           cat > "$CFG/IndigitallWebClientConfig.java" <<'EOF'
           package com.santander.cpe.porweb.integration.indigitall.config;
 
@@ -101,7 +108,7 @@ jobs:
           }
           EOF
 
-          # IndigitallOutboundService.java
+          # ---- IndigitallOutboundService.java
           cat > "$SVC/IndigitallOutboundService.java" <<'EOF'
           package com.santander.cpe.porweb.integration.indigitall.service;
 
@@ -166,7 +173,7 @@ jobs:
           }
           EOF
 
-          # EmailApiReactiveImpl.java
+          # ---- EmailApiReactiveImpl.java
           cat > "$API/EmailApiReactiveImpl.java" <<'EOF'
           package com.santander.cpe.porweb.integration.indigitall.api.impl.reactive;
 
@@ -213,7 +220,7 @@ jobs:
           }
           EOF
 
-          # SmsApiReactiveImpl.java
+          # ---- SmsApiReactiveImpl.java
           cat > "$API/SmsApiReactiveImpl.java" <<'EOF'
           package com.santander.cpe.porweb.integration.indigitall.api.impl.reactive;
 
@@ -260,42 +267,30 @@ jobs:
           }
           EOF
 
-          # Añadir/crear application.yml con bloque indigitall
+          # --- application.yml: añade bloque indigitall si falta
           APP="$ROOT/src/main/resources/application.yml"
-          if [ -f "$APP" ]; then
-            if ! grep -q "^indigitall:" "$APP"; then
-              cat >> "$APP" <<'EOF'
-
-indigitall:
-  base-url: https://am1.api.indigitall.com
-  server-key: ${INDIGITALL_SERVER_KEY:1ba3b093-f67c-4f10-89fb-fa53df94779a}
-  timeout-ms: 10000
-EOF
-            fi
-          else
-            mkdir -p "$(dirname "$APP")"
-            cat > "$APP" <<'EOF'
-indigitall:
-  base-url: https://am1.api.indigitall.com
-  server-key: ${INDIGITALL_SERVER_KEY:1ba3b093-f67c-4f10-89fb-fa53df94779a}
-  timeout-ms: 10000
-EOF
+          if [ ! -f "$APP" ] || ! grep -q "^indigitall:" "$APP"; then
+            cat >> "$APP" <<'EOF'
+          indigitall:
+            base-url: https://am1.api.indigitall.com
+            server-key: ${INDIGITALL_SERVER_KEY:CHANGE_ME}
+            timeout-ms: 10000
+          EOF
           fi
 
-      - name: Build (optional)
-        run: mvn -q -DskipTests -f cpe-porweb-arsbknotification-development/pom.xml verify
+          git add -A
+          git commit -m "feat(indigitall): reactive proxy (WebClient) for email/sms"
+          git push -u origin "$BRANCH"
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: feat(indigitall): reactive proxy for /v2/email/send/list & /v2/sms/send/list
-          branch: feature/indigitall-reactive-proxy
           title: "Indigitall (reactivo): proxy Email/SMS a AM1 con ServerKey"
           body: |
             Implementación reactiva (WebFlux) de EmailApi y SmsApi como proxy hacia Indigitall:
             - WebClient con Authorization: ServerKey
             - Endpoints: /v2/email/send/list y /v2/sms/send/list
             - Config: indigitall.base-url, indigitall.server-key
+          branch: feature/indigitall-reactive-proxy
+          base: main
           labels: integration, indigitall, reactive
-          draft: false
