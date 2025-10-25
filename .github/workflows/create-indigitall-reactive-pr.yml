@@ -1,0 +1,301 @@
+name: Create PR - Indigitall Reactive Proxy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate reactive proxy files
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="cpe-porweb-arsbknotification-development"
+          BASE="$ROOT/src/main/java/com/santander/cpe/porweb/integration/indigitall"
+          CFG="$BASE/config"
+          SVC="$BASE/service"
+          API="$BASE/api/impl/reactive"
+          mkdir -p "$CFG" "$SVC" "$API"
+
+          # IndigitallProperties.java
+          cat > "$CFG/IndigitallProperties.java" <<'EOF'
+          package com.santander.cpe.porweb.integration.indigitall.config;
+
+          import org.springframework.boot.context.properties.ConfigurationProperties;
+
+          @ConfigurationProperties(prefix = "indigitall")
+          public class IndigitallProperties {
+              private String baseUrl;
+              private String serverKey;
+              private int timeoutMs = 10000;
+
+              public String getBaseUrl() { return baseUrl; }
+              public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+              public String getServerKey() { return serverKey; }
+              public void setServerKey(String serverKey) { this.serverKey = serverKey; }
+              public int getTimeoutMs() { return timeoutMs; }
+              public void setTimeoutMs(int timeoutMs) { this.timeoutMs = timeoutMs; }
+          }
+          EOF
+
+          # IndigitallWebClientConfig.java
+          cat > "$CFG/IndigitallWebClientConfig.java" <<'EOF'
+          package com.santander.cpe.porweb.integration.indigitall.config;
+
+          import io.netty.channel.ChannelOption;
+          import io.netty.handler.timeout.ReadTimeoutHandler;
+          import io.netty.handler.timeout.WriteTimeoutHandler;
+          import org.springframework.boot.context.properties.EnableConfigurationProperties;
+          import org.springframework.context.annotation.Bean;
+          import org.springframework.context.annotation.Configuration;
+          import org.springframework.http.HttpHeaders;
+          import org.springframework.http.MediaType;
+          import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+          import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
+          import org.springframework.web.reactive.function.client.WebClient;
+          import reactor.netty.http.client.HttpClient;
+
+          import java.time.Duration;
+          import java.util.concurrent.TimeUnit;
+
+          @Configuration
+          @EnableConfigurationProperties(IndigitallProperties.class)
+          public class IndigitallWebClientConfig {
+
+              @Bean
+              public WebClient indigitallWebClient(IndigitallProperties props) {
+                  HttpClient httpClient = HttpClient.create()
+                      .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, props.getTimeoutMs())
+                      .responseTimeout(Duration.ofMillis(props.getTimeoutMs()))
+                      .doOnConnected(conn -> conn
+                          .addHandlerLast(new ReadTimeoutHandler(props.getTimeoutMs(), TimeUnit.MILLISECONDS))
+                          .addHandlerLast(new WriteTimeoutHandler(props.getTimeoutMs(), TimeUnit.MILLISECONDS)));
+
+                  return WebClient.builder()
+                      .baseUrl(props.getBaseUrl())
+                      .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                      .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                      .defaultHeader(HttpHeaders.AUTHORIZATION, "ServerKey " + props.getServerKey())
+                      .clientConnector(new ReactorClientHttpConnector(httpClient))
+                      .filter(logRequest())
+                      .filter(logResponse())
+                      .build();
+              }
+
+              private ExchangeFilterFunction logRequest() {
+                  return ExchangeFilterFunction.ofRequestProcessor(req -> reactor.core.publisher.Mono.just(req));
+              }
+              private ExchangeFilterFunction logResponse() {
+                  return ExchangeFilterFunction.ofResponseProcessor(res -> reactor.core.publisher.Mono.just(res));
+              }
+          }
+          EOF
+
+          # IndigitallOutboundService.java
+          cat > "$SVC/IndigitallOutboundService.java" <<'EOF'
+          package com.santander.cpe.porweb.integration.indigitall.service;
+
+          import org.springframework.http.HttpStatusCode;
+          import org.springframework.stereotype.Service;
+          import org.springframework.web.reactive.function.client.WebClient;
+          import reactor.core.publisher.Mono;
+
+          import com.santander.cpe.porweb.model.SendEmailRequest;
+          import com.santander.cpe.porweb.model.SendEmailResponse;
+          import com.santander.cpe.porweb.model.SmsSendListRequest;
+          import com.santander.cpe.porweb.model.SmsSendResponse;
+
+          @Service
+          public class IndigitallOutboundService {
+
+              private final WebClient client;
+
+              public IndigitallOutboundService(WebClient indigitallWebClient) {
+                  this.client = indigitallWebClient;
+              }
+
+              public Mono<SendEmailResponse> forwardEmail(SendEmailRequest req) {
+                  return client.post()
+                      .uri("/v2/email/send/list")
+                      .bodyValue(req)
+                      .exchangeToMono(resp -> {
+                          if (resp.statusCode().is2xxSuccessful()) {
+                              return resp.bodyToMono(SendEmailResponse.class);
+                          }
+                          return resp.bodyToMono(String.class)
+                              .defaultIfEmpty("")
+                              .flatMap(body -> Mono.error(new IndigitallException(HttpStatusCode.valueOf(resp.rawStatusCode()), body)));
+                      });
+              }
+
+              public Mono<SmsSendResponse> forwardSms(SmsSendListRequest req) {
+                  return client.post()
+                      .uri("/v2/sms/send/list")
+                      .bodyValue(req)
+                      .exchangeToMono(resp -> {
+                          if (resp.statusCode().is2xxSuccessful()) {
+                              return resp.bodyToMono(SmsSendResponse.class);
+                          }
+                          return resp.bodyToMono(String.class)
+                              .defaultIfEmpty("")
+                              .flatMap(body -> Mono.error(new IndigitallException(HttpStatusCode.valueOf(resp.rawStatusCode()), body)));
+                      });
+              }
+
+              public static class IndigitallException extends RuntimeException {
+                  private final HttpStatusCode status;
+                  private final String responseBody;
+                  public IndigitallException(HttpStatusCode status, String responseBody) {
+                      super("Indigitall error " + status + ": " + responseBody);
+                      this.status = status;
+                      this.responseBody = responseBody;
+                  }
+                  public HttpStatusCode getStatus() { return status; }
+                  public String getResponseBody() { return responseBody; }
+              }
+          }
+          EOF
+
+          # EmailApiReactiveImpl.java
+          cat > "$API/EmailApiReactiveImpl.java" <<'EOF'
+          package com.santander.cpe.porweb.integration.indigitall.api.impl.reactive;
+
+          import com.santander.cpe.porweb.api.EmailApi;
+          import com.santander.cpe.porweb.integration.indigitall.service.IndigitallOutboundService;
+          import com.santander.cpe.porweb.integration.indigitall.service.IndigitallOutboundService.IndigitallException;
+          import com.santander.cpe.porweb.model.SendEmailRequest;
+          import com.santander.cpe.porweb.model.SendEmailResponse;
+
+          import org.springframework.http.ResponseEntity;
+          import org.springframework.stereotype.RestController;
+          import org.springframework.web.bind.annotation.PostMapping;
+          import org.springframework.web.bind.annotation.RequestBody;
+          import org.springframework.web.server.ServerWebExchange;
+          import reactor.core.publisher.Mono;
+
+          @RestController
+          public class EmailApiReactiveImpl implements EmailApi {
+
+              private final IndigitallOutboundService service;
+
+              public EmailApiReactiveImpl(IndigitallOutboundService service) {
+                  this.service = service;
+              }
+
+              @Override
+              @PostMapping(value = "/v2/email/send/list", consumes = "application/json", produces = "application/json")
+              public Mono<ResponseEntity<SendEmailResponse>> sendEmailList(
+                      @RequestBody Mono<SendEmailRequest> request,
+                      ServerWebExchange exchange) {
+
+                  return request
+                      .flatMap(service::forwardEmail)
+                      .map(ResponseEntity::ok)
+                      .onErrorResume(IndigitallException.class, ex -> {
+                          SendEmailResponse err = new SendEmailResponse();
+                          try {
+                              err.getClass().getMethod("setStatus", String.class).invoke(err, "error");
+                              err.getClass().getMethod("setMessage", String.class).invoke(err, ex.getResponseBody());
+                          } catch (Exception ignore) {}
+                          return Mono.just(ResponseEntity.status(ex.getStatus().value()).body(err));
+                      });
+              }
+          }
+          EOF
+
+          # SmsApiReactiveImpl.java
+          cat > "$API/SmsApiReactiveImpl.java" <<'EOF'
+          package com.santander.cpe.porweb.integration.indigitall.api.impl.reactive;
+
+          import com.santander.cpe.porweb.api.SmsApi;
+          import com.santander.cpe.porweb.integration.indigitall.service.IndigitallOutboundService;
+          import com.santander.cpe.porweb.integration.indigitall.service.IndigitallOutboundService.IndigitallException;
+          import com.santander.cpe.porweb.model.SmsSendListRequest;
+          import com.santander.cpe.porweb.model.SmsSendResponse;
+
+          import org.springframework.http.ResponseEntity;
+          import org.springframework.stereotype.RestController;
+          import org.springframework.web.bind.annotation.PostMapping;
+          import org.springframework.web.bind.annotation.RequestBody;
+          import org.springframework.web.server.ServerWebExchange;
+          import reactor.core.publisher.Mono;
+
+          @RestController
+          public class SmsApiReactiveImpl implements SmsApi {
+
+              private final IndigitallOutboundService service;
+
+              public SmsApiReactiveImpl(IndigitallOutboundService service) {
+                  this.service = service;
+              }
+
+              @Override
+              @PostMapping(value = "/v2/sms/send/list", consumes = "application/json", produces = "application/json")
+              public Mono<ResponseEntity<SmsSendResponse>> sendSmsList(
+                      @RequestBody Mono<SmsSendListRequest> request,
+                      ServerWebExchange exchange) {
+
+                  return request
+                      .flatMap(service::forwardSms)
+                      .map(ResponseEntity::ok)
+                      .onErrorResume(IndigitallException.class, ex -> {
+                          SmsSendResponse err = new SmsSendResponse();
+                          try {
+                              err.getClass().getMethod("setStatus", String.class).invoke(err, "error");
+                              err.getClass().getMethod("setMessage", String.class).invoke(err, ex.getResponseBody());
+                          } catch (Exception ignore) {}
+                          return Mono.just(ResponseEntity.status(ex.getStatus().value()).body(err));
+                      });
+              }
+          }
+          EOF
+
+          # Añadir/crear application.yml con bloque indigitall
+          APP="$ROOT/src/main/resources/application.yml"
+          if [ -f "$APP" ]; then
+            if ! grep -q "^indigitall:" "$APP"; then
+              cat >> "$APP" <<'EOF'
+
+indigitall:
+  base-url: https://am1.api.indigitall.com
+  server-key: ${INDIGITALL_SERVER_KEY:1ba3b093-f67c-4f10-89fb-fa53df94779a}
+  timeout-ms: 10000
+EOF
+            fi
+          else
+            mkdir -p "$(dirname "$APP")"
+            cat > "$APP" <<'EOF'
+indigitall:
+  base-url: https://am1.api.indigitall.com
+  server-key: ${INDIGITALL_SERVER_KEY:1ba3b093-f67c-4f10-89fb-fa53df94779a}
+  timeout-ms: 10000
+EOF
+          fi
+
+      - name: Build (optional)
+        run: mvn -q -DskipTests -f cpe-porweb-arsbknotification-development/pom.xml verify
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: feat(indigitall): reactive proxy for /v2/email/send/list & /v2/sms/send/list
+          branch: feature/indigitall-reactive-proxy
+          title: "Indigitall (reactivo): proxy Email/SMS a AM1 con ServerKey"
+          body: |
+            Implementación reactiva (WebFlux) de EmailApi y SmsApi como proxy hacia Indigitall:
+            - WebClient con Authorization: ServerKey
+            - Endpoints: /v2/email/send/list y /v2/sms/send/list
+            - Config: indigitall.base-url, indigitall.server-key
+          labels: integration, indigitall, reactive
+          draft: false
