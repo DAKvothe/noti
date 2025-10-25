@@ -24,7 +24,7 @@ jobs:
       - name: Create branch and add reactive proxy files
         run: |
           set -euo pipefail
-          BRANCH="feature/indigitall-reactive-proxy"
+          BRANCH="feature/indigitall-reactive-proxy-add"
           git checkout -B "$BRANCH"
 
           ROOT="noti/cpe-porweb-arsbknotification-development"
@@ -281,16 +281,3 @@ jobs:
           git add -A
           git commit -m "feat(indigitall): reactive proxy (WebClient) for email/sms"
           git push -u origin "$BRANCH"
-
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          title: "Indigitall (reactivo): proxy Email/SMS a AM1 con ServerKey"
-          body: |
-            Implementación reactiva (WebFlux) de EmailApi y SmsApi como proxy hacia Indigitall:
-            - WebClient con Authorization: ServerKey
-            - Endpoints: /v2/email/send/list y /v2/sms/send/list
-            - Config: indigitall.base-url, indigitall.server-key
-          branch: feature/indigitall-reactive-proxy
-          base: main
-          labels: integration, indigitall, reactive
