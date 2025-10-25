@@ -129,3 +129,7 @@ management:
     readinessState:
       enabled: true
 
+indigitall:
+  base-url: https://am1.api.indigitall.com
+  server-key: ${INDIGITALL_SERVER_KEY:CHANGE_ME}
+  timeout-ms: 10000
