@@ -27,7 +27,7 @@ jobs:
           BRANCH="feature/indigitall-reactive-proxy-add"
           git checkout -B "$BRANCH"
 
-          ROOT="noti/cpe-porweb-arsbknotification-development"
+          ROOT="cpe-porweb-arsbknotification-development"
           BASE="$ROOT/src/main/java/com/santander/cpe/porweb/integration/indigitall"
           CFG="$BASE/config"
           SVC="$BASE/service"
