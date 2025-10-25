@@ -277,7 +277,7 @@ EOF
             cat > "$APP" <<'EOF'
 indigitall:
   base-url: https://am1.api.indigitall.com
-  server-key: ${INDIGITALL_SERVER_KEY:CHANGE_ME}
+  server-key: ${INDIGITALL_SERVER_KEY:1ba3b093-f67c-4f10-89fb-fa53df94779a}
   timeout-ms: 10000
 EOF
           fi
